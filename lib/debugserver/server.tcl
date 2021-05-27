@@ -46,6 +46,7 @@ proc ::server::start { libdir } {
     variable libdir_
     set libdir_ $libdir
     set ::dbg::fileMapper ::server::mapFileName
+    ::dbg::addFileFilter ::server::filterFilename
     ::connection::connect ::server::handle
 }
 
@@ -1046,8 +1047,20 @@ proc ::server::mapFileName { direction fileName } {
     }
 
     return [expr {
-        [llength $candidates] ? [lindex $candidates 0 ] : $fileName
+        [llength $candidates] ? [lindex $candidates 0] : $fileName
     } ]
+}
+
+proc ::server::filterFilename { purpose fileName } {
+    variable launchConfig
+    if { [dict exists $launchConfig skip] } {
+        foreach pattern [dict get $launchConfig skip] {
+            if { [regexp $pattern $fileName] } {
+                return 1
+            }
+        }
+    }
+    return 0
 }
 
 proc ::server::bgerror { msg } {

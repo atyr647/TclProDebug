@@ -121,6 +121,10 @@ namespace eval dbg {
     # implementing a tolocal command
     variable fileMapper
 
+    # Delegates to filter files for instrumenting. Should be an ensemble
+    # implementing a instrument command
+    variable fileFilter [list]
+
     # launch delegate --
     #
     #    appLaunchDelegate      a proc taking { command stdin } which will
@@ -1640,6 +1644,11 @@ proc dbg::ignoreError {} {
     return
 }
 
+proc dbg::addFileFilter { filter } {
+    variable fileFilter
+    lappend fileFilter $filter
+}
+
 
 # dbg::Instrument --
 #
@@ -1656,6 +1665,7 @@ proc dbg::ignoreError {} {
 
 proc dbg::Instrument {file script} {
     variable fileMapper
+    variable fileFilter
 
     if { [info exists fileMapper] } {
         set file [$fileMapper tolocal $file]
@@ -1671,29 +1681,45 @@ proc dbg::Instrument {file script} {
     DeliverEvent instrument start $block
     set alreadyInstrumented [blk::isInstrumented $block]
 
-    # Generate the instrumented script.
-
-    set icode [blk::Instrument $block $script]
-
-    # Ensure that all breakpoints are valid.
-        
-    dbg::validateBreakpoints $file $block
-
-    if {$icode != "" && !$alreadyInstrumented} {
-        # If the instrumentation succeeded and the block was not previously
-        # instrumented (e.g. re-sourcing), create any enabled breakpoints.
-
-        foreach breakpoint [break::GetLineBreakpoints \
-                [loc::makeLocation $block {}]] {
-            if {[break::getState $breakpoint] == "enabled"} {
-                SendAsync DbgNub_AddBreakpoint "line" \
-                        [break::getLocation $breakpoint] \
-                        [break::getTest $breakpoint]
+    set skip 0
+    if { $file ne "" } {
+        foreach filter $fileFilter {
+            if { [catch { set skip [$filter instrument $file] } output] } {
+                Log error {Filter expression $filter failed: $output}
+            } elseif { $skip } {
+                break
             }
         }
     }
 
-    DeliverEvent instrument end $block
+    if { $skip } {
+        DeliverEvent instrument skip $block
+        set icode ""
+    } else {
+        # Generate the instrumented script.
+
+        set icode [blk::Instrument $block $script]
+
+        # Ensure that all breakpoints are valid.
+            
+        dbg::validateBreakpoints $file $block
+
+        if {$icode != "" && !$alreadyInstrumented} {
+            # If the instrumentation succeeded and the block was not previously
+            # instrumented (e.g. re-sourcing), create any enabled breakpoints.
+
+            foreach breakpoint [break::GetLineBreakpoints \
+                    [loc::makeLocation $block {}]] {
+                if {[break::getState $breakpoint] == "enabled"} {
+                    SendAsync DbgNub_AddBreakpoint "line" \
+                            [break::getLocation $breakpoint] \
+                            [break::getTest $breakpoint]
+                }
+            }
+        }
+
+        DeliverEvent instrument end $block
+    }
     return $icode
 }
 
