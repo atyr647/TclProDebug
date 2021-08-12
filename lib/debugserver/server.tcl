@@ -173,8 +173,8 @@ proc ::server::OnRequest_initialize { msg } {
 
     setState CONFIGURING
     ::connection::respond $msg [json::write object \
-        supportsConfigurationDoneRequest true     \
-        supportsConditionalBreakpionts   true
+        supportsConfigurationDoneRequest true      \
+        supportsConditionalBreakpoints   true      \
     ]
 
     if { $options(supportsRunInterminalRequest) } {
@@ -261,6 +261,25 @@ proc ::server::OnRequest_setFunctionBreakpoints { msg } {
     if { $state ne "CONFIGURING" && $state ne "DEBUGGING" } {
         ::connection::reject $msg \
                              "Invalid event 'setFunctionBreakpoints' in state\
+                              $state"
+        return
+    }
+
+    # TODO
+
+    ::connection::respond $msg [json::write object \
+        breakpoints [json::write array]            \
+    ]
+}
+
+proc ::server::OnRequest_setExceptionBreakpoints { msg } {
+    variable state
+
+    dbg::Log info {setExceptionBreakpoints request in $state}
+
+    if { $state ne "CONFIGURING" && $state ne "DEBUGGING" } {
+        ::connection::reject $msg \
+                             "Invalid event 'setExceptionBreakpoints' in state\
                               $state"
         return
     }
@@ -1038,6 +1057,8 @@ proc ::server::mapFileName { direction fileName } {
                     # sequence of matches, so that we can return the first one
                     # that matched, even if it doesn't exist
                     if { [file exists $mapped] } {
+                        ::dbg::Log info \
+                                  {Found source for $fileName = $mapped}
                         return $mapped
                     }
                     lappend candidates $mapped
@@ -1046,9 +1067,15 @@ proc ::server::mapFileName { direction fileName } {
         }
     }
 
-    return [expr {
+    set mapped [expr {
         [llength $candidates] ? [lindex $candidates 0] : $fileName
     } ]
+
+    if { ![file exists $mapped] } {
+        ::dbg::Log info {Unable to find source for $fileName = $mapped}
+    }
+
+    return $mapped
 }
 
 proc ::server::filterFilename { purpose fileName } {
@@ -1056,6 +1083,7 @@ proc ::server::filterFilename { purpose fileName } {
     if { [dict exists $launchConfig skip] } {
         foreach pattern [dict get $launchConfig skip] {
             if { [regexp $pattern $fileName] } {
+                ::dbg::Log info {skipping parsing of $fileName}
                 return 1
             }
         }
