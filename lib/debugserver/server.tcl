@@ -791,7 +791,8 @@ proc ::server::_DoEvaluate { msg } {
 
     set expression [dict get $msg arguments expression]
     set context "watch"
-    set fmt "scalar"
+    # default fmt is to display first 20 chars as if a scalar
+    set fmt "unknown"
     catch { set context [dict get $msg arguments context] }
 
     switch -- $context {
@@ -803,9 +804,15 @@ proc ::server::_DoEvaluate { msg } {
                 set expression [string range $expression 0 end-2]
                 set fmt dict
             } elseif { [string match {*,s} $expression] } {
-                # scalar is the default, this is required in case some funky
-                # expression actually ends ',s'
+                # scalar is sort of the default (but we truncate to 20 chars).
+                # if the user explicitly requests scalar (with ,s suffix) then
+                # don't force them to expand the result to see all of it
+                set fmt "scalar"
                 set expression [string range $expression 0 end-2]
+            } elseif { [string match {*,a} $expression] } {
+                set arrayName [string range $expression 0 end-2] 
+                set fmt dict
+                set expression "array get $arrayName"
             }
 
             if { [string is list $expression] && 
@@ -862,12 +869,16 @@ proc ::server::resultHandler { id code result errCode errInfo } {
         set variablesReference 0
 
         switch -- $fmt {
-            "scalar" {
+            "unknown" {
+                # basically a scalar, but truncate to 20 chars
                 set eval_result $result
                 set variablesReference [_MakeVariableReference scalar $result]
                 if { [string length $eval_result] > 20 } {
                     set eval_result "[string range $eval_result 0 20]..."
                 }
+            }
+            "scalar" {
+                set eval_result $result
             }
             "list" {
                 if { ![string is list $result] } {
