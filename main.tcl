@@ -80,15 +80,25 @@ if {![info exists topdir]} {
 # Add module path within package lib path:
 ::tcl::tm::path add [file dirname $::starkit::topdir]//[file tail $::starkit::topdir]/lib/tm
 
-# Interpreter mode: with TCLPRO_RUN_STDIN set, run the script that arrives on
-# standard input (like "tclsh < script") instead of starting the debugger GUI.
+# Interpreter mode: with TCLPRO_RUN_STDIN set, run the script named on the
+# command line, or else the one that arrives on standard input (like "tclsh"),
+# instead of starting the debugger GUI.
 # This lets the Tcl/Tk built into a packaged executable serve as the interpreter
 # for the program being debugged, for people who have no Tcl installed.  The
 # debugger sets this itself when asked to use the executable as the interpreter
 # (see src/selftest.tcl), and it is harmless for every other interpreter.
 if {[info exists ::env(TCLPRO_RUN_STDIN)]} {
 	unset ::env(TCLPRO_RUN_STDIN)
-	set code [catch {uplevel #0 [read stdin]} result opts]
+	if {[llength $::argv] > 0} {
+		# "interpreter script ?arg ...?", which is how the debugger starts
+		# the application on Windows.
+		set argv0 [lindex $::argv 0]
+		set argv [lrange $::argv 1 end]
+		set argc [llength $argv]
+		set code [catch {uplevel #0 [list source $argv0]} result opts]
+	} else {
+		set code [catch {uplevel #0 [read stdin]} result opts]
+	}
 	if {$code} {
 		puts stderr [dict get $opts -errorinfo]
 		exit 1

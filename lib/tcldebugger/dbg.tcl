@@ -165,6 +165,46 @@ proc dbg::attach_remote { host port } {
     ::dbg::HandleConnect $socket $host $port
 }
 
+# dbg::LaunchScriptPath --
+#
+#       Returns the path of appLaunch.tcl in a form that the application being
+#       debugged can read.  Normally that is the file in the debugger's library
+#       directory.  When the debugger runs from a single-file executable
+#       (starpack) that file lives in the executable's virtual file system,
+#       which other processes cannot see, so copy it to a real file first.
+#
+# Arguments:
+#       None.
+#
+# Results:
+#       A path to a readable copy of appLaunch.tcl.
+
+proc dbg::LaunchScriptPath {} {
+    variable libDir
+
+    set path [file join $libDir appLaunch.tcl]
+    if {[lindex [file system $path] 0] eq "native"} {
+        return $path
+    }
+
+    foreach var {TEMP TMP TMPDIR} {
+        if {[info exists ::env($var)] && [file isdirectory $::env($var)]} {
+            set dir $::env($var)
+            break
+        }
+    }
+    if {![info exists dir]} {
+        if {$::tcl_platform(platform) eq "windows"} {
+            set dir C:/Windows/Temp
+        } else {
+            set dir /tmp
+        }
+    }
+    set copy [file join $dir tclprodebug-appLaunch.tcl]
+    file copy -force $path $copy
+    return $copy
+}
+
 # dbg::start --
 #
 #       Starts the application.  Generates an error is one is already running.
@@ -217,7 +257,7 @@ proc dbg::start {application startDir script argList clientData { setenv {} }} {
         if {$::tcl_platform(platform) == "windows"} {
             set args ""
             foreach arg [list \
-                    [file nativename [file join $libDir appLaunch.tcl]] \
+                    [file nativename [dbg::LaunchScriptPath]] \
                     127.0.0.1 \
                     $serverPort \
                     [file nativename $script] \
