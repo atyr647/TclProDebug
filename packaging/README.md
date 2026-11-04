@@ -67,7 +67,8 @@ against nothing but itself (no interpreter is installed on the runner).
 ## Releasing
 
 Push a tag named `vX.Y.Z`. The workflow builds all four binaries, tests them, and
-creates a GitHub release containing archives (`.tar.gz` for Linux/macOS,
+creates a **draft** GitHub release (nothing is public until you review and
+publish it) containing archives (`.tar.gz` for Linux/macOS,
 `.zip` for Windows) and a `SHA256SUMS` file. Pushes to branches and pull
 requests build and test but do not publish; the binaries are available as
 workflow artifacts.

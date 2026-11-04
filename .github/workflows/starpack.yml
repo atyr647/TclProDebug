@@ -2,7 +2,8 @@ name: Starpacks
 
 # Builds single-file TclProDebug executables for Linux, Windows and macOS,
 # tests each one on its own platform, and (for tags named v*) publishes them as
-# a GitHub release.  See packaging/README.md.
+# a *draft* GitHub release that a person must review and publish.  See
+# packaging/README.md.
 
 on:
   push:
@@ -194,5 +195,5 @@ jobs:
           sha256sum TclProDebug-* > SHA256SUMS
           cat SHA256SUMS
           gh release create "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" \
-            --title "TclProDebug $GITHUB_REF_NAME" --generate-notes \
+            --draft --title "TclProDebug $GITHUB_REF_NAME" --generate-notes \
             TclProDebug-* SHA256SUMS
