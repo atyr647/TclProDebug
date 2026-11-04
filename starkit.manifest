@@ -96,10 +96,9 @@ lib/remotedebug/initdebug.tcl
 lib/remotedebug/pkgIndex.tcl
 lib/projectInfo/projectInfo.tcl
 lib/projectInfo/pkgIndex.tcl
-lib/tclparser/pkgIndex.tcl
-lib/tclparser/libtclparser1.8.so
 license.terms
 src/startup.tcl
 src/images/debugUnixIcon.gif
 src/images/about.gif
 src/images/logo.gif
+src/selftest.tcl

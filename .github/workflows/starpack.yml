@@ -1,0 +1,198 @@
+name: Starpacks
+
+# Builds single-file TclProDebug executables for Linux, Windows and macOS,
+# tests each one on its own platform, and (for tags named v*) publishes them as
+# a GitHub release.  See packaging/README.md.
+
+on:
+  push:
+    branches: ['**']
+    tags: ['v*']
+    paths:
+      - 'lib/**'
+      - 'src/**'
+      - 'main.tcl'
+      - 'starkit.manifest'
+      - 'packaging/**'
+      - '.github/workflows/starpack.yml'
+  pull_request:
+    paths:
+      - 'lib/**'
+      - 'src/**'
+      - 'main.tcl'
+      - 'starkit.manifest'
+      - 'packaging/**'
+      - '.github/workflows/starpack.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  # KitCreator is pinned to an exact commit so builds are reproducible.
+  KITCREATOR_REF: dc14b6f1f0ac82d4a694b6dba0187fceaec668b1
+  # Tcl/Tk 9 is only used as a *debuggee* in the tests, to prove that the
+  # packaged debugger can debug Tk 9 programs.
+  TCL9_VERSION: 9.0.1
+  TCL9_SHA256: a72b1607d7a399c75148c80fcdead88ed3371a29884181f200f2200cdee33bbc
+  TK9_SHA256: d6f01a4d598bfc6398be9584e1bab828c907b0758db4bbb351a1429106aec527
+
+jobs:
+  build:
+    name: build (${{ matrix.target }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: linux-x86_64
+            os: ubuntu-22.04      # oldest glibc we can get: widest compatibility
+          - target: windows-x86_64
+            os: ubuntu-22.04      # cross-compiled with mingw-w64, tested on Windows below
+          - target: macos-arm64
+            os: macos-latest
+          - target: macos-x86_64
+            os: macos-15-intel
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/checkout@v4
+        with:
+          repository: rkeene/kitcreator
+          ref: ${{ env.KITCREATOR_REF }}
+          path: .kitcreator
+
+      - name: Install build dependencies (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            autoconf build-essential tcl zip \
+            libx11-dev libxft-dev libxext-dev libxss-dev libfontconfig1-dev \
+            xvfb tcl8.6 tk8.6
+          if [ "${{ matrix.target }}" = windows-x86_64 ]; then
+            sudo apt-get install -y --no-install-recommends gcc-mingw-w64-x86-64 binutils-mingw-w64-x86-64
+          fi
+
+      - name: Install build dependencies (macOS)
+        if: runner.os == 'macOS'
+        run: brew install autoconf
+
+      - name: Build
+        run: packaging/build-starpack.sh ${{ matrix.target }}
+
+      # ---- Tests: only where the binary can run on the build machine ----
+
+      - name: Self-test (Linux)
+        if: matrix.target == 'linux-x86_64'
+        run: |
+          exe="$PWD/dist/TclProDebug-linux-x86_64"
+          for interp in tclsh8.6 wish8.6; do
+            xvfb-run -a "$exe" --selftest "$PWD/report-$interp.txt" "$(command -v $interp)"
+          done
+
+      - name: Restore Tcl/Tk 9 (debuggee)
+        if: matrix.target == 'linux-x86_64'
+        id: tcl9cache
+        uses: actions/cache@v4
+        with:
+          path: ~/tcl9
+          key: tcl-tk-${{ env.TCL9_VERSION }}-${{ runner.os }}-1
+
+      - name: Build Tcl/Tk 9 (debuggee)
+        if: matrix.target == 'linux-x86_64' && steps.tcl9cache.outputs.cache-hit != 'true'
+        run: |
+          cd "$RUNNER_TEMP"
+          v=${TCL9_VERSION}
+          curl -fsSLO "https://prdownloads.sourceforge.net/tcl/tcl$v-src.tar.gz"
+          curl -fsSLO "https://prdownloads.sourceforge.net/tcl/tk$v-src.tar.gz"
+          echo "$TCL9_SHA256  tcl$v-src.tar.gz" | sha256sum -c -
+          echo "$TK9_SHA256  tk$v-src.tar.gz" | sha256sum -c -
+          tar xzf tcl$v-src.tar.gz && tar xzf tk$v-src.tar.gz
+          (cd tcl$v/unix && ./configure --prefix="$HOME/tcl9" && make -j"$(nproc)" && make install)
+          (cd tk$v/unix && ./configure --prefix="$HOME/tcl9" --with-tcl="$RUNNER_TEMP/tcl$v/unix" && make -j"$(nproc)" && make install)
+
+      - name: Self-test, debugging a Tk 9 program (Linux)
+        if: matrix.target == 'linux-x86_64'
+        run: |
+          # This is the scenario from the original bug report: the debugger
+          # running a program that loads Tk 9.
+          xvfb-run -a "$PWD/dist/TclProDebug-linux-x86_64" \
+            --selftest "$PWD/report-tcl9.txt" "$HOME/tcl9/bin/tclsh9.0"
+          grep -q 'tcl=9\.' report-tcl9.txt
+          grep -q 'tk=1' report-tcl9.txt
+
+      - name: Self-test (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          brew install tcl-tk tcl-tk@8
+          exe="$PWD/dist/TclProDebug-${{ matrix.target }}"
+          "$exe" --selftest "$PWD/report.txt"
+          for interp in "$(brew --prefix tcl-tk@8)/bin/tclsh8.6" "$(brew --prefix tcl-tk)/bin/tclsh9.0"; do
+            "$exe" --selftest "$PWD/report-$(basename "$interp").txt" "$interp"
+          done
+          grep -q 'tk=1' report-tclsh9.0.txt
+
+      - name: Package
+        run: |
+          cd dist
+          name="TclProDebug-${{ matrix.target }}"
+          if [ "${{ matrix.target }}" = windows-x86_64 ]; then
+            zip -9 "$name.zip" "$name.exe"
+          else
+            tar -czf "$name.tar.gz" "$name"
+          fi
+          ls -l
+
+      - name: Show test reports
+        if: always()
+        run: for f in report*.txt; do echo "=== $f"; cat "$f"; done
+        continue-on-error: true
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: starpack-${{ matrix.target }}
+          path: |
+            dist/*.tar.gz
+            dist/*.zip
+          if-no-files-found: error
+
+  test-windows:
+    name: test (windows-x86_64)
+    needs: build
+    runs-on: windows-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: starpack-windows-x86_64
+      - name: Self-test
+        shell: pwsh
+        run: |
+          Expand-Archive TclProDebug-windows-x86_64.zip -DestinationPath .
+          $p = Start-Process -FilePath .\TclProDebug-windows-x86_64.exe `
+                 -ArgumentList '--selftest', "$PWD\report.txt" -Wait -PassThru
+          if (Test-Path report.txt) { Get-Content report.txt }
+          if ($p.ExitCode -ne 0) { throw "self-test failed with exit code $($p.ExitCode)" }
+          if (-not (Select-String -Path report.txt -Pattern 'RESULT: PASSED' -Quiet)) { throw 'no PASSED marker' }
+
+  release:
+    name: publish release
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [build, test-windows]
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: starpack-*
+          merge-multiple: true
+      - name: Checksums and release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          sha256sum TclProDebug-* > SHA256SUMS
+          cat SHA256SUMS
+          gh release create "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" \
+            --title "TclProDebug $GITHUB_REF_NAME" --generate-notes \
+            TclProDebug-* SHA256SUMS

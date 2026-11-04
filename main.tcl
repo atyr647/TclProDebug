@@ -80,5 +80,10 @@ if {![info exists topdir]} {
 # Add module path within package lib path:
 ::tcl::tm::path add [file dirname $::starkit::topdir]//[file tail $::starkit::topdir]/lib/tm
 
+# Used by the build to verify a packaged executable (see src/selftest.tcl):
+if {[lindex $::argv 0] eq "--selftest"} {
+	source $::starkit::topdir/src/selftest.tcl
+}
+
 source $::starkit::topdir/src/startup.tcl
 
