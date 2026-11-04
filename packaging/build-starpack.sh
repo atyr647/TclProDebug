@@ -80,6 +80,19 @@ cp -R "${root}/lib/tclparser/." "${kc}/tclparser/buildsrc/"
 rm -rf "${kc}/tclparser/buildsrc/tests" "${kc}/tclparser/buildsrc/doc"
 chmod +x "${kc}/tclprodebug/build.sh" "${kc}/tclparser/build.sh"
 
+# KitCreator ships zlib 1.2.8 (2013).  It has had security fixes since, and it
+# does not compile against current macOS SDKs.  Use 1.3.1 everywhere; the
+# download is verified against this checksum by KitCreator.
+zlib_sha256='9a93b2b7dfdac77ceba5a558a580e74667dd6fede4585b91eefb60f03b72df23'
+sed -i.bak \
+	-e 's/^version=.*/version="1.3.1"/' \
+	-e 's#^url=.*#url="https://github.com/madler/zlib/releases/download/v${version}/zlib-${version}.tar.gz"#' \
+	-e "s/^sha256=.*/sha256='${zlib_sha256}'/" \
+	"${kc}/zlib/build.sh"
+grep -q "^version=\"1.3.1\"" "${kc}/zlib/build.sh" \
+	&& grep -q "${zlib_sha256}" "${kc}/zlib/build.sh" \
+	|| die "could not pin zlib in KitCreator"
+
 # ---------------------------------------------------------------------------
 # 2. Per-platform toolchain settings.
 # ---------------------------------------------------------------------------
@@ -107,6 +120,12 @@ case "${target}" in
 		export CC="clang -arch ${arch}" CXX="clang++ -arch ${arch}"
 		# Keep the binaries runnable on reasonably old systems.
 		export MACOSX_DEPLOYMENT_TARGET="${MACOSX_DEPLOYMENT_TARGET:-11.0}"
+		# KitCreator's own C sources use pre-ANSI (K&R) function definitions,
+		# which C23 removed.  A current autoconf (2.72+) makes the compiler
+		# default to C23, so ask for C99 explicitly (flags given in CFLAGS
+		# come after the compiler's own, so they win).
+		export ac_cv_prog_cc_c23=no
+		export KC_KITSH_CFLAGS="${KC_KITSH_CFLAGS:-} -std=gnu99"
 		flags+=(--enable-aqua)
 		;;
 esac
