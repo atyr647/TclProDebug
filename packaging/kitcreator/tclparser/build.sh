@@ -13,3 +13,12 @@ tclpkgversion='1.8'
 # The init function is Tclparser_Init (not Parser_Init, which is what
 # KitCreator would otherwise guess from the package name).
 tclpkg_initfunc='Tclparser_Init'
+
+# The extension's own makefile installs a pkgIndex.tcl that loads the
+# libtclparser1.8.a archive by file name.  That is wrong for a statically linked
+# package (and the archive is not shipped), so remove it and let KitCreator write
+# the right one: "load {} parser".
+function postinstall() {
+	rm -f "${installdir}"/lib/*/pkgIndex.tcl
+	return 0
+}

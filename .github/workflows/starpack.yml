@@ -29,6 +29,11 @@ on:
 permissions:
   contents: read
 
+# A newer push to the same branch supersedes an older, still-running build.
+concurrency:
+  group: starpacks-${{ github.ref }}
+  cancel-in-progress: true
+
 env:
   # KitCreator is pinned to an exact commit so builds are reproducible.
   KITCREATOR_REF: dc14b6f1f0ac82d4a694b6dba0187fceaec668b1
