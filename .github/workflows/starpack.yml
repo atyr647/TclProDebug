@@ -213,6 +213,7 @@ jobs:
           install: >-
             mingw-w64-x86_64-gcc
             make
+            zip
 
       - name: Build Tcl/Tk 9 (debuggee)
         if: steps.tcl9cache.outputs.cache-hit != 'true'
