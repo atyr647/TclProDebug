@@ -57,7 +57,7 @@ jobs:
           - target: windows-x86_64
             os: ubuntu-22.04      # cross-compiled with mingw-w64, tested on Windows below
           - target: macos-arm64
-            os: macos-latest
+            os: macos-15          # Apple Silicon; older SDK than macos-latest, shorter queue
           - target: macos-x86_64
             os: macos-15-intel
     steps:
