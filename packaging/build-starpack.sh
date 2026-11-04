@@ -90,7 +90,7 @@ add_source_hash() {	# <build.sh> <version> <sha256>
 		/^[ \t]*8\.6\.12\)[ \t]*$/ && !done {
 			print "\t" v ")"; print "\t\tSRCHASH=\047" h "\047"; print "\t\t;;"; done=1
 		}
-		{ print }' "${file}" > "${file}.new" && mv "${file}.new" "${file}"
+		{ print }' "${file}" > "${file}.new" && cat "${file}.new" > "${file}" && rm -f "${file}.new"
 	grep -q "${sha}" "${file}" || die "could not pin the ${version} checksum in ${file}"
 }
 case "${TCLVERS}" in
