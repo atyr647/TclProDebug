@@ -93,6 +93,17 @@ grep -q "^version=\"1.3.1\"" "${kc}/zlib/build.sh" \
 	&& grep -q "${zlib_sha256}" "${kc}/zlib/build.sh" \
 	|| die "could not pin zlib in KitCreator"
 
+# KitCreator probes its freshly linked kit by running it ("echo 'exit 0' | kit"),
+# to see whether it can be used to install the virtual file system.  The kit
+# already contains this application, so on a machine with a display it starts the
+# GUI and never exits.  We do not need the probe: with cvfs/zip storage the
+# files are installed by the native tclsh.  Never run the half-built kit.
+if grep -q "^[[:space:]]*if echo 'exit 0' | \"\${KITTARGET_NAME}\"" "${kc}/kitsh/build.sh"; then
+	sed -i.bak "s#^\([[:space:]]*\)if echo 'exit 0' | \"\${KITTARGET_NAME}\" >/dev/null 2>/dev/null; then#\1if false; then#" "${kc}/kitsh/build.sh"
+fi
+grep -q "^[[:space:]]*if false; then" "${kc}/kitsh/build.sh" \
+	|| die "could not disable KitCreator's kit probe"
+
 # ---------------------------------------------------------------------------
 # 2. Per-platform toolchain settings.
 # ---------------------------------------------------------------------------
