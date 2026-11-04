@@ -124,21 +124,34 @@ if ! find kitsh/buildsrc -name configure -type f | grep -q .; then
 	./build/pre.sh
 fi
 
+# Print KitCreator's per-package logs (collapsible in GitHub Actions).
+# Usage: show_logs <lines> [package...]   (no packages = all of them)
 show_logs() {
-	for log in */build.log; do
+	local lines="$1"; shift
+	local log pkg
+	local pkgs=("$@")
+	if [ "${#pkgs[@]}" = 0 ]; then
+		pkgs=($(ls -d */ | tr -d /))
+	fi
+	for pkg in "${pkgs[@]}"; do
+		log="${pkg}/build.log"
 		[ -f "${log}" ] || continue
-		echo "::group::${log} (last 80 lines)"
-		tail -n 80 "${log}"
+		echo "::group::${log} (last ${lines} lines)"
+		tail -n "${lines}" "${log}"
 		echo "::endgroup::"
 	done
 }
 
 ./kitcreator distclean >/dev/null 2>&1 || true
 if ! ./kitcreator "${TCLVERS}" "${flags[@]}"; then
-	show_logs
+	show_logs 80
 	die "KitCreator failed"
 fi
-[ -f "tclkit-${TCLVERS}" ] || { show_logs; die "KitCreator did not produce a kit"; }
+[ -f "tclkit-${TCLVERS}" ] || { show_logs 80; die "KitCreator did not produce a kit"; }
+# Always show the logs of the parts we add; they are the ones most likely to
+# need attention and are short.
+show_logs 400 tclparser tclprodebug
+show_logs 60 kitsh
 
 out="${dist}/TclProDebug-${target}${exe_suffix}"
 cp "tclkit-${TCLVERS}" "${out}"

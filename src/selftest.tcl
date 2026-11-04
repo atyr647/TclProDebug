@@ -121,6 +121,7 @@ selftest::log "tcl        : [info patchlevel]"
 selftest::log "topdir     : $::starkit::topdir"
 
 selftest::check "Tk" {
+    package require Tk
     toplevel .selftest
     update
     destroy .selftest
