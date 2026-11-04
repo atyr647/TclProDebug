@@ -181,9 +181,17 @@ show_logs 60 kitsh
 vfs="$(echo "${kc}"/kitsh/build/kitsh-*/starpack.vfs)"
 if [ -d "${vfs}" ]; then
 	echo "::group::starpack.vfs contents"
-	(cd "${vfs}" && ls -la . lib && for f in lib/vfs/pkgIndex.tcl lib/tclparser*/pkgIndex.tcl lib/tk*/pkgIndex.tcl; do
-		[ -f "$f" ] && { echo "--- $f"; head -c 300 "$f" | head -n 6; echo; }
-	done)
+	(
+		cd "${vfs}"
+		ls -la . lib
+		for f in lib/vfs/pkgIndex.tcl lib/tclparser*/pkgIndex.tcl lib/tk*/pkgIndex.tcl; do
+			if [ -f "${f}" ]; then
+				echo "--- ${f}"
+				head -c 300 "${f}" | head -n 6
+				echo
+			fi
+		done
+	) || true
 	echo "::endgroup::"
 fi
 
