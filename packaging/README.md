@@ -83,5 +83,9 @@ workflow artifacts.
   a browser, clear the quarantine flag once:
   `xattr -d com.apple.quarantine TclProDebug-macos-*`.
 * **Windows**: the executable is unsigned, so SmartScreen may warn on first run.
+* When the debugger runs from the executable and starts your application on
+  Windows, it copies its launch script (`appLaunch.tcl`) to a temporary file
+  (`%TEMP%\\tclprodebug-appLaunch.tcl`), because other processes cannot read
+  files inside the executable.
 * The VS Code debug adapter (`bin/debugadapter`) is a separate entry point and is
   not part of the starpack; it still runs from a checkout with `tclsh`.
