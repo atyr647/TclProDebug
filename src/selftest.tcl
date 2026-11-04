@@ -74,7 +74,7 @@ proc selftest::debugSession {interp} {
 	set ::v [square 7]
 	set tk [expr {![catch {package require Tk}]}]
 	set f [open $::env(SELFTEST_OUT) w]
-	puts $f "v=$::v tk=$tk tcl=[info patchlevel]"
+	puts $f "v=$::v tk=$tk tcl=[info patchlevel] argv=[llength $::argv]"
 	close $f
 	if {$tk} { catch {destroy .} }
 	exit 0
@@ -117,6 +117,11 @@ proc selftest::debugSession {interp} {
     catch {file delete -force $dir}
     if {![string match "v=49 *" $result]} {
 	error "unexpected debuggee result: $result"
+    }
+    # The debuggee must see exactly the arguments we gave it (none), not
+    # whatever the launcher used to start it.
+    if {![string match "* argv=0" $result]} {
+	error "debuggee received unexpected arguments: $result"
     }
     return $result
 }

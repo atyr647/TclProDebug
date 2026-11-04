@@ -61,9 +61,9 @@ jobs:
           - target: macos-x86_64
             os: macos-15-intel
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
 
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
         with:
           repository: rkeene/kitcreator
           ref: ${{ env.KITCREATOR_REF }}
@@ -104,7 +104,7 @@ jobs:
       - name: Restore Tcl/Tk 9 (debuggee)
         if: matrix.target == 'linux-x86_64'
         id: tcl9cache
-        uses: actions/cache@v4
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
         with:
           path: ~/tcl9
           key: tcl-tk-${{ env.TCL9_VERSION }}-${{ runner.os }}-1
@@ -165,7 +165,7 @@ jobs:
         run: for f in report*.txt; do echo "=== $f"; cat "$f"; done
         continue-on-error: true
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5.0.0
         with:
           name: starpack-${{ matrix.target }}
           path: |
@@ -177,23 +177,70 @@ jobs:
     name: test (windows-x86_64)
     needs: build
     runs-on: windows-latest
-    timeout-minutes: 15
+    timeout-minutes: 60
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5.0.0
         with:
           name: starpack-windows-x86_64
-      - name: Self-test
+
+      - name: Self-test (the executable's own Tcl/Tk)
         shell: pwsh
         run: |
           Expand-Archive TclProDebug-windows-x86_64.zip -DestinationPath .
-          # No Tcl is installed on the runner, so debug with the program's own
-          # built-in Tcl/Tk ("self").
           $p = Start-Process -FilePath .\TclProDebug-windows-x86_64.exe `
-                 -ArgumentList '--selftest', "$PWD\report.txt", 'self' -Wait -PassThru
-          if (Test-Path report.txt) { Get-Content report.txt }
+                 -ArgumentList '--selftest', "$PWD\report-self.txt", 'self' -Wait -PassThru
+          if (Test-Path report-self.txt) { Get-Content report-self.txt }
           if ($p.ExitCode -ne 0) { throw "self-test failed with exit code $($p.ExitCode)" }
-          if (-not (Select-String -Path report.txt -Pattern 'RESULT: PASSED' -Quiet)) { throw 'no PASSED marker' }
-          if (-not (Select-String -Path report.txt -Pattern 'debug session in' -Quiet)) { throw 'no debug session was run' }
+          if (-not (Select-String -Path report-self.txt -Pattern 'RESULT: PASSED' -Quiet)) { throw 'no PASSED marker' }
+          if (-not (Select-String -Path report-self.txt -Pattern 'debug session in' -Quiet)) { throw 'no debug session was run' }
+
+      # The scenario from the original bug report, on Windows: debug a Tk 9
+      # program with an external Tcl/Tk 9 interpreter.  No Tcl is installed on the
+      # runner, so build one (cached).
+      - name: Restore Tcl/Tk 9 (debuggee)
+        id: tcl9cache
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
+        with:
+          path: C:\tcl9win
+          key: tcl-tk-${{ env.TCL9_VERSION }}-Windows-1
+
+      - name: Set up MSYS2 (to build Tcl/Tk 9)
+        if: steps.tcl9cache.outputs.cache-hit != 'true'
+        uses: msys2/setup-msys2@ec48f7c5447b3140e2b088413ae3a55687bccb6e # v2.33.0
+        with:
+          msystem: MINGW64
+          update: false
+          install: >-
+            mingw-w64-x86_64-gcc
+            make
+
+      - name: Build Tcl/Tk 9 (debuggee)
+        if: steps.tcl9cache.outputs.cache-hit != 'true'
+        shell: msys2 {0}
+        run: |
+          set -e
+          cd /tmp
+          v="${TCL9_VERSION}"
+          curl -fsSLO "https://prdownloads.sourceforge.net/tcl/tcl$v-src.tar.gz"
+          curl -fsSLO "https://prdownloads.sourceforge.net/tcl/tk$v-src.tar.gz"
+          echo "${TCL9_SHA256}  tcl$v-src.tar.gz" | sha256sum -c -
+          echo "${TK9_SHA256}  tk$v-src.tar.gz" | sha256sum -c -
+          tar xzf tcl$v-src.tar.gz && tar xzf tk$v-src.tar.gz
+          (cd tcl$v/win && ./configure --prefix=/c/tcl9win && make -j"$(nproc)" && make install)
+          (cd tk$v/win && ./configure --prefix=/c/tcl9win --with-tcl=/tmp/tcl$v/win && make -j"$(nproc)" && make install)
+
+      - name: Self-test, debugging a Tk 9 program (Windows)
+        shell: pwsh
+        run: |
+          $tclsh = 'C:\tcl9win\bin\tclsh90.exe'
+          if (-not (Test-Path $tclsh)) { throw "$tclsh was not built" }
+          $p = Start-Process -FilePath .\TclProDebug-windows-x86_64.exe `
+                 -ArgumentList '--selftest', "$PWD\report-tcl9.txt", $tclsh -Wait -PassThru
+          if (Test-Path report-tcl9.txt) { Get-Content report-tcl9.txt }
+          if ($p.ExitCode -ne 0) { throw "self-test failed with exit code $($p.ExitCode)" }
+          if (-not (Select-String -Path report-tcl9.txt -Pattern 'RESULT: PASSED' -Quiet)) { throw 'no PASSED marker' }
+          if (-not (Select-String -Path report-tcl9.txt -Pattern 'tcl=9\.' -Quiet)) { throw 'the debuggee was not Tcl 9' }
+          if (-not (Select-String -Path report-tcl9.txt -Pattern 'tk=1' -Quiet)) { throw 'Tk 9 was not loaded by the debuggee' }
 
   release:
     name: publish release
@@ -204,7 +251,7 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5.0.0
         with:
           pattern: starpack-*
           merge-multiple: true

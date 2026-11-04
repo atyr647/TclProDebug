@@ -19,8 +19,9 @@
 # Environment:
 #   KITCREATOR_DIR   checkout of https://github.com/rkeene/kitcreator
 #                    (default: ./.kitcreator).  CI pins a commit.
-#   TCLVERS          Tcl/Tk version to build (default 8.6.12, the newest that
-#                    KitCreator can verify against a known checksum).
+#   TCLVERS          Tcl/Tk version to build (default 8.6.17).  Only versions
+#                    whose source checksums are pinned below, or known to
+#                    KitCreator (8.6.4 - 8.6.12), are accepted.
 #   KIT_STORAGE      how the application is stored in the executable:
 #                    cvfs (default; compiled into the binary, so the file is
 #                    never modified after linking and can be code-signed) or zip.
@@ -36,7 +37,7 @@ target="${1:-}"
 here="$(cd "$(dirname "$0")" && pwd)"
 root="$(cd "${here}/.." && pwd)"
 kc="$(cd "${KITCREATOR_DIR:-${root}/.kitcreator}" && pwd)"
-TCLVERS="${TCLVERS:-8.6.12}"
+TCLVERS="${TCLVERS:-8.6.17}"
 KIT_STORAGE="${KIT_STORAGE:-cvfs}"
 dist="${DIST_DIR:-${root}/dist}"
 mkdir -p "${dist}"
@@ -79,6 +80,27 @@ cp "${here}/kitcreator/tclparser/build.sh" "${kc}/tclparser/build.sh"
 cp -R "${root}/lib/tclparser/." "${kc}/tclparser/buildsrc/"
 rm -rf "${kc}/tclparser/buildsrc/tests" "${kc}/tclparser/buildsrc/doc"
 chmod +x "${kc}/tclprodebug/build.sh" "${kc}/tclparser/build.sh"
+
+# KitCreator only knows the checksums of Tcl/Tk up to 8.6.12 (2022).  Pin newer
+# releases here; KitCreator then verifies every download against them.
+add_source_hash() {	# <build.sh> <version> <sha256>
+	local file="$1" version="$2" sha="$3"
+	grep -q "^[[:space:]]*${version})" "${file}" && return 0
+	awk -v v="${version}" -v h="${sha}" '
+		/^[ \t]*8\.6\.12\)[ \t]*$/ && !done {
+			print "\t" v ")"; print "\t\tSRCHASH=\047" h "\047"; print "\t\t;;"; done=1
+		}
+		{ print }' "${file}" > "${file}.new" && mv "${file}.new" "${file}"
+	grep -q "${sha}" "${file}" || die "could not pin the ${version} checksum in ${file}"
+}
+case "${TCLVERS}" in
+	8.6.17)
+		add_source_hash "${kc}/tcl/build.sh" 8.6.17 a3903371efcce8a405c5c245d029e9f6850258a60fa3761c4d58995610949b31
+		add_source_hash "${kc}/tk/build.sh" 8.6.17 e4982df6f969c08bf9dd858a6891059b4a3f50dc6c87c10abadbbe2fc4838946
+		;;
+	8.6.4|8.6.5|8.6.6|8.6.7|8.6.8|8.6.9|8.6.10|8.6.11|8.6.12) ;;
+	*) die "no pinned source checksum for Tcl/Tk ${TCLVERS}" ;;
+esac
 
 # KitCreator ships zlib 1.2.8 (2013).  It has had security fixes since, and it
 # does not compile against current macOS SDKs.  Use 1.3.1 everywhere; the

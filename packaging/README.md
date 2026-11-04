@@ -31,8 +31,8 @@ running the script it is given on standard input (the debugger sets this for you
    * `tclprodebug`: the application files listed in `starkit.manifest`, stored at
      the root of the executable's virtual file system, which makes `main.tcl` the
      program that runs at startup.
-3. KitCreator builds Tcl 8.6.12 and Tk 8.6.12 (the newest versions it can verify
-   against a known checksum) from source and produces the executable. The
+3. KitCreator builds Tcl 8.6.17 and Tk 8.6.17 (checksums pinned in
+   `build-starpack.sh`) from source and produces the executable. The
    application is compiled *into* the binary (`cvfs` storage) rather than
    appended to it, so the file is never modified after linking. That keeps it
    code-signable on macOS.

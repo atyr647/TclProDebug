@@ -275,8 +275,10 @@ proc dbg::start {application startDir script argList clientData { setenv {} }} {
                     lappend args $arg
                 }
             }
-            exec {*}[auto_execok start] [file nativename $application] {*}$args {*}$argList \
-                    [file nativename $startDir] &
+            # The application inherits the current directory, which was set to
+            # $startDir above.  Do not also pass $startDir as an argument: it
+            # would show up in the application's argv.
+            exec {*}[auto_execok start] [file nativename $application] {*}$args {*}$argList &
         } else {
             set args ""
             # Ensure that the argument string is a valid Tcl list so we can
