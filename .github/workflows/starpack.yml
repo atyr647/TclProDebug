@@ -96,6 +96,9 @@ jobs:
           for interp in tclsh8.6 wish8.6; do
             xvfb-run -a "$exe" --selftest "$PWD/report-$interp.txt" "$(command -v $interp)"
           done
+          # ...and debugging with the executable's own built-in Tcl/Tk.
+          xvfb-run -a "$exe" --selftest "$PWD/report-self.txt" self
+          grep -q 'debug session in .*TclProDebug' report-self.txt
 
       - name: Restore Tcl/Tk 9 (debuggee)
         if: matrix.target == 'linux-x86_64'
@@ -133,7 +136,8 @@ jobs:
         run: |
           brew install tcl-tk tcl-tk@8
           exe="$PWD/dist/TclProDebug-${{ matrix.target }}"
-          "$exe" --selftest "$PWD/report.txt"
+          "$exe" --selftest "$PWD/report.txt" self
+          grep -q 'debug session in .*TclProDebug' report.txt
           for interp in "$(brew --prefix tcl-tk@8)/bin/tclsh8.6" "$(brew --prefix tcl-tk)/bin/tclsh9.0"; do
             "$exe" --selftest "$PWD/report-$(basename "$interp").txt" "$interp"
           done
@@ -175,11 +179,14 @@ jobs:
         shell: pwsh
         run: |
           Expand-Archive TclProDebug-windows-x86_64.zip -DestinationPath .
+          # No Tcl is installed on the runner, so debug with the program's own
+          # built-in Tcl/Tk ("self").
           $p = Start-Process -FilePath .\TclProDebug-windows-x86_64.exe `
-                 -ArgumentList '--selftest', "$PWD\report.txt" -Wait -PassThru
+                 -ArgumentList '--selftest', "$PWD\report.txt", 'self' -Wait -PassThru
           if (Test-Path report.txt) { Get-Content report.txt }
           if ($p.ExitCode -ne 0) { throw "self-test failed with exit code $($p.ExitCode)" }
           if (-not (Select-String -Path report.txt -Pattern 'RESULT: PASSED' -Quiet)) { throw 'no PASSED marker' }
+          if (-not (Select-String -Path report.txt -Pattern 'debug session in' -Quiet)) { throw 'no debug session was run' }
 
   release:
     name: publish release

@@ -21,6 +21,10 @@ namespace eval selftest {
     variable failed 0
     variable out [lindex $::argv 1]
     variable debuggee [lindex $::argv 2]
+    # "self" means: debug with this program's own built-in Tcl/Tk.
+    if {$debuggee eq "self"} {
+	set debuggee [info nameofexecutable]
+    }
 }
 
 proc selftest::log {msg} {
@@ -87,7 +91,9 @@ proc selftest::debugSession {interp} {
 	dbg::register $e [list ::selftest::ev $e]
     }
     dbg::setServerPort random
-    dbg::start $interp $dir $script {} selftest
+    # TCLPRO_RUN_STDIN makes this program's own executable behave like tclsh
+    # (see main.tcl); real interpreters ignore it.
+    dbg::start $interp $dir $script {} selftest {TCLPRO_RUN_STDIN 1}
 
     set timer [after 30000 {set ::selftest::e2eEvent timeout}]
     set events {}

@@ -13,7 +13,10 @@ tools:
 
 The executable contains its own Tcl/Tk 8.6 runtime. **That is independent of the
 program you debug**: your application runs in whichever `tclsh`/`wish` you select
-in the project settings (Tcl 8.5, 8.6 and 9.x are supported, Tk 9 included).
+in the project settings (Tcl 8.5, 8.6 and 9.x are supported, Tk 9 included). With
+no Tcl installed at all, you can point the project at the executable itself: when
+the environment variable `TCLPRO_RUN_STDIN` is set it behaves like `tclsh`,
+running the script it is given on standard input (the debugger sets this for you).
 
 ## How it is built
 
@@ -61,8 +64,9 @@ It verifies Tk, the parser and the debugger package, and, if you name an
 interpreter (e.g. `tclsh9.0`), runs a short Tcl/Tk program under the real
 debugger engine in that interpreter. The report is written to `report.txt` and
 the exit status is 0 only if everything passed. CI runs this on each platform:
-Linux against Tcl 8.6 and Tk 9, macOS against Tcl 8.6 and Tcl/Tk 9, Windows
-against nothing but itself (no interpreter is installed on the runner).
+Linux against Tcl 8.6 and Tk 9, macOS against Tcl 8.6 and Tcl/Tk 9, and all three
+against the executable's own built-in Tcl/Tk (`self`), which is what the Windows
+test uses since no interpreter is installed on the runner.
 
 ## Releasing
 
