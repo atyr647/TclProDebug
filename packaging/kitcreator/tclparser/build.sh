@@ -16,9 +16,18 @@ tclpkg_initfunc='Tclparser_Init'
 
 # The extension's own makefile installs a pkgIndex.tcl that loads the
 # libtclparser1.8.a archive by file name.  That is wrong for a statically linked
-# package (and the archive is not shipped), so remove it and let KitCreator write
-# the right one: "load {} parser".
+# package (and the archive is not shipped), so replace it.
+#
+# KitCreator registers a static package under the name of its init function
+# (Tclparser_Init -> "tclparser"), which is not the name of the package it
+# provides ("parser"), so the index has to say so explicitly.
 function postinstall() {
-	rm -f "${installdir}"/lib/*/pkgIndex.tcl
+	local dir
+	for dir in "${installdir}"/lib/tclparser*; do
+		[ -d "${dir}" ] || continue
+		cat > "${dir}/pkgIndex.tcl" << '_EOF_'
+package ifneeded parser 1.8 [list load {} tclparser]
+_EOF_
+	done
 	return 0
 }

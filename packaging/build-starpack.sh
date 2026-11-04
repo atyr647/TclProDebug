@@ -126,6 +126,10 @@ case "${target}" in
 		# come after the compiler's own, so they win).
 		export ac_cv_prog_cc_c23=no
 		export KC_KITSH_CFLAGS="${KC_KITSH_CFLAGS:-} -std=gnu99"
+		# Tk's Cocoa code relies on Objective-C categories, which the linker
+		# silently drops from a static library unless told otherwise (the
+		# symptom is "unrecognized selector ... tkProcessEvent:" at startup).
+		export KC_KITSH_LDFLAGS="${KC_KITSH_LDFLAGS:-} -ObjC"
 		flags+=(--enable-aqua)
 		;;
 esac
@@ -171,6 +175,17 @@ fi
 # need attention and are short.
 show_logs 400 tclparser tclprodebug
 show_logs 60 kitsh
+
+# Show what went into the executable's file system (collapsed); the first
+# thing to look at if a package cannot be found at run time.
+vfs="$(echo "${kc}"/kitsh/build/kitsh-*/starpack.vfs)"
+if [ -d "${vfs}" ]; then
+	echo "::group::starpack.vfs contents"
+	(cd "${vfs}" && ls -la . lib && for f in lib/vfs/pkgIndex.tcl lib/tclparser*/pkgIndex.tcl lib/tk*/pkgIndex.tcl; do
+		[ -f "$f" ] && { echo "--- $f"; head -c 300 "$f" | head -n 6; echo; }
+	done)
+	echo "::endgroup::"
+fi
 
 out="${dist}/TclProDebug-${target}${exe_suffix}"
 cp "tclkit-${TCLVERS}" "${out}"
