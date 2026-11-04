@@ -139,10 +139,15 @@ jobs:
           exe="$PWD/dist/TclProDebug-${{ matrix.target }}"
           "$exe" --selftest "$PWD/report.txt" self
           grep -q 'debug session in .*TclProDebug' report.txt
-          for interp in "$(brew --prefix tcl-tk@8)/bin/tclsh8.6" "$(brew --prefix tcl-tk)/bin/tclsh9.0"; do
-            "$exe" --selftest "$PWD/report-$(basename "$interp").txt" "$interp"
-          done
-          grep -q 'tk=1' report-tclsh9.0.txt
+          # Homebrew's current Tcl/Tk 9 (the version number changes over time).
+          tcl8="$(brew --prefix tcl-tk@8)/bin/tclsh8.6"
+          tcl9="$(ls "$(brew --prefix tcl-tk)"/bin/tclsh9* | head -n 1)"
+          echo "Tcl 8 debuggee: $tcl8"; echo "Tcl 9 debuggee: $tcl9"
+          "$exe" --selftest "$PWD/report-tcl8.txt" "$tcl8"
+          "$exe" --selftest "$PWD/report-tcl9.txt" "$tcl9"
+          grep -q 'tcl=8\.' report-tcl8.txt
+          grep -q 'tcl=9\.' report-tcl9.txt
+          grep -q 'tk=1' report-tcl9.txt
 
       - name: Package
         run: |

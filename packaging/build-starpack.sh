@@ -141,6 +141,13 @@ case "${target}" in
 		# silently drops from a static library unless told otherwise (the
 		# symptom is "unrecognized selector ... tkProcessEvent:" at startup).
 		export KC_KITSH_LDFLAGS="${KC_KITSH_LDFLAGS:-} -ObjC"
+		# Newer Apple ranlib rewrites any file it is given into an archive, and
+		# the tclvfs makefile runs it on pkgIndex.tcl.  Put a wrapper that only
+		# touches real archives first on PATH (see packaging/tools/ranlib).
+		mkdir -p "${kc}/.tools"
+		cp "${here}/tools/ranlib" "${kc}/.tools/ranlib"
+		chmod +x "${kc}/.tools/ranlib"
+		export PATH="${kc}/.tools:${PATH}"
 		flags+=(--enable-aqua)
 		;;
 esac
