@@ -1,0 +1,37 @@
+#! /bin/sh
+#
+# ranlib wrapper for macOS builds.
+#
+# Some TEA makefiles (e.g. tclvfs) run "ranlib" over every file they install,
+# including pkgIndex.tcl.  Older versions of Apple's ranlib just complain that
+# the file is not an archive; newer ones rewrite it *into* an archive, which
+# silently destroys the package index.  This wrapper passes only real archives
+# to the real ranlib and leaves every other file alone.
+
+real="${RANLIB_REAL:-/usr/bin/ranlib}"
+
+n=$#
+i=0
+files=0
+while [ "${i}" -lt "${n}" ]; do
+	arg="$1"
+	shift
+	i=$((i + 1))
+	case "${arg}" in
+		-*)
+			set -- "$@" "${arg}"
+			;;
+		*)
+			if [ -f "${arg}" ] && [ "$(head -c 7 "${arg}")" != '!<arch>' ]; then
+				continue    # not an archive: leave it alone
+			fi
+			set -- "$@" "${arg}"
+			files=$((files + 1))
+			;;
+	esac
+done
+
+# Nothing left to do (every file given was not an archive).
+[ "${files}" -gt 0 ] || exit 0
+
+exec "${real}" "$@"

@@ -1067,9 +1067,9 @@ proc DbgNub_GetVar {level maxlen varList} {
         # is to wrap upvar and track every alias.  This is a lot of work for a
         # very unusual case, so we are punting for now.
 
-        set traces [trace vinfo local]
+        set traces [trace info variable local]
         foreach trace $traces {
-            eval trace vdelete local $trace
+            trace remove variable local {*}$trace
         }
         # We use the odd string range call instead of string index
         # to work on 8.0
@@ -1077,9 +1077,9 @@ proc DbgNub_GetVar {level maxlen varList} {
             set avar [lindex [split $var "("] 0]
             upvar #$level $avar alocal
 
-            set atraces [trace vinfo alocal]
+            set atraces [trace info variable alocal]
             foreach trace $atraces {
-                eval trace vdelete alocal $trace
+                trace remove variable alocal {*}$trace
             }
         } else {
             set atraces {}
@@ -1142,10 +1142,10 @@ proc DbgNub_GetVar {level maxlen varList} {
         # Restore the traces
 
         foreach trace $traces {
-            eval trace variable local $trace
+            trace add variable local {*}$trace
         }
         foreach trace $atraces {
-            eval trace variable alocal $trace
+            trace add variable alocal {*}$trace
         }
     }
     return $result
@@ -1586,7 +1586,7 @@ proc DbgNub_Proc {location name argList body} {
     ${ns}set DbgNub_catchCode \[DbgNub_UpdateReturnInfo \[
         [list DbgNub_catchCmd $body DbgNub_result DbgNub_options]\]\]
     ${ns}foreach DbgNub_index \[${ns}info locals\] {
-        ${ns}if {\[${ns}trace vinfo \$DbgNub_index\] != \"\"} {
+        ${ns}if {\[${ns}trace info variable \$DbgNub_index\] != \"\"} {
             ${ns}if {[${ns}catch {${ns}upvar 0 DbgNub_dummy \$DbgNub_index}]} {
                 ${ns}catch {${ns}unset \$DbgNub_index}
             }
@@ -1619,12 +1619,21 @@ proc DbgNub_PushProcContext {level} {
     # name refers to a proc or a command.
     
     if {$DbgNub(namespace)} {
-        set qualName [DbgNub_uplevelCmd \#[expr {$level - 1}] \
-                [list $DbgNub(scope)namespace origin $name]]
+        # Resolve the name from the caller's scope first, since that is
+        # where it was invoked.  If the proc was reached through [tailcall]
+        # (e.g. Tcl 9's msgcat::mcload does "tailcall mcpackageconfig ..."),
+        # the frame that resolved the name is gone and the name is relative
+        # to the proc's own namespace, so fall back to resolving it there.
 
-        if {$qualName == ""} {
-            DbgNub_PushContext $level "proc" $name {}
-        } else {
+        set qualName ""
+        foreach scopeLevel [list [expr {$level - 1}] $level] {
+            if {![DbgNub_catchCmd {DbgNub_uplevelCmd \#$scopeLevel \
+                    [list $DbgNub(scope)namespace origin $name]} result]} {
+                set qualName $result
+                break
+            }
+        }
+        if {$qualName != ""} {
             set name $qualName
         }
     
@@ -1677,7 +1686,7 @@ proc DbgNub_WrapItclBody {args} {
     ${ns}set DbgNub_catchCode \[DbgNub_UpdateReturnInfo \[
         [list DbgNub_catchCmd $body DbgNub_result DbgNub_options]\]\]
     ${ns}foreach DbgNub_index \[${ns}info locals\] {
-        ${ns}if {\[${ns}trace vinfo \$DbgNub_index\] != \"\"} {
+        ${ns}if {\[${ns}trace info variable \$DbgNub_index\] != \"\"} {
             ${ns}if {[${ns}catch {${ns}upvar 0 DbgNub_dummy \$DbgNub_index}]} {
                 ${ns}catch {${ns}unset \$DbgNub_index}
             }
@@ -2302,8 +2311,11 @@ proc DbgNub_sourceWrapper {args} {
         set code [DbgNub_catchCmd {
             DbgNub_uplevelCmd [list DbgNub_sourceCmd $file]
         } result options]
+        # The options from catch carry "-level 0", which would turn this
+        # return into a no-op and fall through to source the file again.
+        # Force "-level 1" so we really return from this procedure.
         return -code $code -errorcode $errorCode -errorinfo $errorInfo \
-                -options $options $result
+                -options $options -level 1 $result
     }
         
     # If the users preferences indicate that autoloaded scripts 
@@ -2383,8 +2395,10 @@ proc DbgNub_sourceWrapper {args} {
         set DbgNub(script) [lreplace $DbgNub(script) end end]
         set DbgNub(inExclude) $oldExclude
 
+        # Force "-level 1" (see above) so the file is not sourced a second
+        # time, instrumented, by the code below.
         return -code $code -errorcode $errorCode -errorinfo $errorInfo \
-                -options $options $result
+                -options $options -level 1 $result
     }
 
     lappend DbgNub(script) $file
@@ -2743,7 +2757,7 @@ proc DbgNub_GetVarTrace {level name} {
     }
 
     upvar #$level $name var
-    foreach trace [trace vinfo var] {
+    foreach trace [trace info variable var] {
         set command [lindex $trace 1]
         if {[string compare [lindex $command 0] "DbgNub_TraceVar"] == 0} {
             set handle [lindex $command 1]
@@ -2797,7 +2811,7 @@ proc DbgNub_AddVarTrace {level name} {
 
     set DbgNub(var:$handle) {}
     set DbgNub(varRefs:$handle) 1
-    trace variable var wu "DbgNub_TraceVar $handle $type"
+    trace add variable var {write unset} "DbgNub_TraceVar $handle $type"
     return $handle
 }
 
@@ -2954,7 +2968,11 @@ proc DbgNub_TraceVar {handle type name1 name2 op} {
 
     DbgNub_ProcessMessages 0
 
-    # Compute the complete name and the correct operation to report
+    # Compute the complete name and the correct operation to report.
+    # New-style traces report "write"/"unset"; the debugger protocol
+    # uses the single-letter forms "w"/"u".
+
+    set op [string index $op 0]
 
     if {$type == "array"} {
         if {$name2 != "" && $op == "u"} {
@@ -2970,7 +2988,7 @@ proc DbgNub_TraceVar {handle type name1 name2 op} {
     # Clean up the trace state if the handle is dead.
     
     if {! [DbgNub_infoCmd exists DbgNub(var:$handle)]} {
-        trace vdelete $name wu "DbgNub_TraceVar $handle $type"
+        trace remove variable $name {write unset} "DbgNub_TraceVar $handle $type"
         return
     }
 

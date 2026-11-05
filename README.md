@@ -10,7 +10,16 @@ including:
 
 Note: It's only tested with Vimspector.
 
-## Install
+## Download (standalone GUI debugger)
+
+Single-file executables for Linux, Windows and macOS (Apple Silicon and Intel)
+are built from source by CI. They bundle their own Tcl/Tk and need nothing
+installed. The program you debug runs in whichever `tclsh`/`wish` you choose, so
+Tcl 8.5, 8.6 and 9.x (including Tk 9) all work. See
+[packaging/README.md](packaging/README.md) for details, how they are built and
+tested, and how to build one yourself.
+
+## Install from source
 
 To install: You will need to install the extension in lib/tclparser to add the
 parse command to Tcl.
