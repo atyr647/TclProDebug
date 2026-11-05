@@ -6,16 +6,12 @@ name: Starpacks
 # packaging/README.md.
 
 on:
+  # No "paths" filter on push: GitHub applies it to tag pushes too, and a tag
+  # that points at an already-pushed commit has no changed files, so a release
+  # tag would silently build nothing.
   push:
     branches: ['**']
     tags: ['v*']
-    paths:
-      - 'lib/**'
-      - 'src/**'
-      - 'main.tcl'
-      - 'starkit.manifest'
-      - 'packaging/**'
-      - '.github/workflows/starpack.yml'
   pull_request:
     paths:
       - 'lib/**'
